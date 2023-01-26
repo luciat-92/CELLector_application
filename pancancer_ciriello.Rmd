@@ -1,30 +1,86 @@
 ---
-title: "Application Pancancer Ciriello"
+title: "Application CELLector to pancancer collection (Ciriello)"
 author: "Lucia Trastulla"
 date: "14/12/2022"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+### Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The data is obtained from a collaboration with Giovanni Ciriello. The collection includes multiple data sets and is divided per missense and truncating variants. We use the latest CELLector version that includes the partitioned one.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r, message=FALSE, warning=FALSE}
+library(devtools)
+if (!require("CELLector", character.only = TRUE)) {
+  install_github("Francescojm/CELLector")
+}
+if (!require("ggplot2", character.only = TRUE)) {
+  install.packages("ggplot2")
+}
+if (!require("tidyverse", character.only = TRUE)) {
+  install.packages("tidyverse")
+}
+library(CELLector)
+library(ggplot2)
+library(tidyverse)
 ```
 
-## Including Plots
+### Load data
 
-You can also embed plots, for example:
+```{r,  fig.height = 9, fig.width = 6}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+input_fold <- "/group/iorio/Datasets/tumour_binary_Ciriello/"
+meta_table <- read_tsv(sprintf("%sall_merged_metadata.tsv", input_fold), 
+                       show_col_types = FALSE)
+object_to_load <- list.files(input_fold, pattern = ".rds")
+
+obj <- list()
+for (id_name in seq_len(length(object_to_load))) {
+  
+  obj[[id_name]] <- readRDS(paste0(input_fold, object_to_load[id_name]))
+  obj[[id_name]]$M$M$total <- obj[[id_name]]$M$M$missense + obj[[id_name]]$M$M$truncating
+  meta_tmp <- meta_table[match(names(obj[[id_name]]$sample.class), meta_table$sample), ]
+  obj[[id_name]]$sample_info <- meta_tmp
+}
+
+tot_sample_info <- lapply(obj, function(x) x$sample_info) %>%
+  dplyr::bind_rows()
+
+t_factor <- tot_sample_info %>% 
+  dplyr::group_by(Tissue) %>%
+  dplyr::summarise(count = n()) %>%
+  dplyr::arrange(desc(count)) %>% 
+  dplyr::pull(Tissue)
+
+tot_sample_info <- tot_sample_info %>% 
+  dplyr::mutate(Tissue = factor(Tissue, levels = as.character(t_factor)))
+
+ggplot(tot_sample_info, aes(x = Tissue, fill = Cohort)) + 
+  geom_bar() + 
+  theme_bw() +
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+### store data separately for each cancer type
+
+### apply CELLector
+
+### are there enrichments in subtypes?
+
+### download CCL data and project, differences on essentiality?
+
+```{r}
+
+# divide cohorts per tissues/cancer type (create custom function), run CELLector partitioned and not. Is there a relationship
+
+```
+
+
