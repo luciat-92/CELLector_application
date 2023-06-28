@@ -9,6 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(chatgpt, lib.loc = "~/R/x86_64-pc-linux-gnu-library/4.1/")
 ```
 
 ### Introduction
@@ -45,7 +46,8 @@ for (id_name in seq_len(length(object_to_load))) {
   
   obj[[id_name]] <- readRDS(paste0(input_fold, object_to_load[id_name]))
   obj[[id_name]]$M$M$total <- obj[[id_name]]$M$M$missense + obj[[id_name]]$M$M$truncating
-  meta_tmp <- meta_table[match(names(obj[[id_name]]$sample.class), meta_table$sample), ]
+  obj[[id_name]]$M$M$total <- apply(obj[[id_name]]$M$M$total > 0, c(1,2), as.numeric)
+  meta_tmp <- meta_table[match(colnames(obj[[id_name]]$M$M$total), meta_table$sample), ]
   obj[[id_name]]$sample_info <- meta_tmp
 }
 
@@ -69,18 +71,111 @@ ggplot(tot_sample_info, aes(x = Tissue, fill = Cohort)) +
 
 ```
 
-### store data separately for each cancer type
-
-### apply CELLector
-
-### are there enrichments in subtypes?
-
-### download CCL data and project, differences on essentiality?
+### Store data separately for each cancer type
 
 ```{r}
 
-# divide cohorts per tissues/cancer type (create custom function), run CELLector partitioned and not. Is there a relationship
+extract_cancer <- function(obj_cohort, 
+                           var_name = "Tissue"){
+  
+  BEM <- obj_cohort$M$M$total 
+  type_name <- obj_cohort$sample_info %>% dplyr::pull(get(var_name)) %>% unique()
+  BEM_split <- purrr::map(type_name, function(x) BEM[,obj_cohort$sample_info$Tissue == x])
+  names(BEM_split) <- type_name
+  
+  return(BEM_split)    
+}
+
+build_BEM_cancer_type <- function(obj_split, tissue){
+  
+  obj_single_tissue <- obj_split %>% keep(names(.) %in% c(tissue))
+  common_mut <- purrr::map(obj_single_tissue, rownames) %>% 
+    purrr::flatten_chr() %>%
+    unique()
+
+  # take union and assign to 0 for non-available ones (CORRECT?)
+  obj_harmonized_single_tissue <- purrr::map(obj_single_tissue, function(x)
+    if (any(!common_mut %in% rownames(x))) {
+      rbind(x, matrix(0, 
+                      nrow = length(setdiff(common_mut, rownames(x))), 
+                      ncol = ncol(x),
+                      dimnames = list(setdiff(common_mut, rownames(x)), colnames(x))))
+    }else{x})
+
+  obj_harmonized_single_tissue <- purrr::map(obj_harmonized_single_tissue, 
+                                           function(x) x[common_mut,])
+  BEM_single_tissue <- purrr::reduce(obj_harmonized_single_tissue, cbind)
+  meta_table_tissue <- meta_table[match(colnames(BEM_single_tissue), meta_table$sample),]
+  
+  return(list(BEM = BEM_single_tissue, 
+              meta = meta_table_tissue))
+  
+}
+
+obj_split_tissue <- purrr::map(obj, function(x) extract_cancer(x)) %>% 
+  purrr::flatten()
+tissues_name <- unique(names(obj_split_tissue))
+
+BEM_all <- purrr::map(tissues_name, function(x) 
+  build_BEM_cancer_type(obj_split_tissue, x))
+
+names(BEM_all) <- tissues_name
 
 ```
+
+### Apply CELLector
+
+```{r}
+
+create_CSSp_groups <- function(CSS_p){
+  
+  id_samples <- str_split(CSS_p$Points, pattern = "[,]")
+  id_sign <- purrr::map2(.x = id_samples, .y = CSS_p$Signature, 
+                         .f = ~ rep(.y, length(.x)))
+  df <- data.frame(sample = flatten_chr(id_samples), 
+                   CELLectorP_Sign = flatten_chr(id_sign))
+  return(df)
+}
+
+CSSp_group_complete <- list()
+CSS <- list()
+
+for (id_t in seq_len(length(tissues_name))) {
+
+  cancer_type <- tissues_name[id_t]
+  print(paste("######", cancer_type, "######"))
+  
+  minGlobSupp_par <- 0.01
+  #n_samples <- ncol(BEM_all[[cancer_type]]$BEM)
+  #if (floor(n_samples*0.01) < 20) {
+  #   minGlobSupp_par <- 20/n_samples
+  #}
+  
+  CSS[[id_t]] <- CELLector.Build_Search_Space_Partitioned(
+    ctumours = t(BEM_all[[cancer_type]]$BEM), 
+    cancerType = cancer_type, 
+    mutOnly = TRUE, 
+    UD_genomics = TRUE, 
+    verbose = FALSE, 
+    minGlobSupp = minGlobSupp_par)
+
+  print(CELLector.visualiseSearchingSpace_sunBurst(searchSpace = CSS[[id_t]]$hierarchical))
+
+  CSSp_group <- create_CSSp_groups(CSS_p = CSS[[id_t]]$partitioned)
+  meta_tissue <- BEM_all[[cancer_type]]$meta
+  CSSp_group_complete[[id_t]] <- full_join(CSSp_group, meta_tissue) %>% 
+    dplyr::mutate(CSS_minGlobSupp =  minGlobSupp_par)
+  
+}
+
+```
+
+### Are there enrichments in subtypes?
+
+### Download survival info, differences?
+
+### Download CCL data and project, differences on essentiality?
+
+
 
 

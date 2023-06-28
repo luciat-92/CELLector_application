@@ -96,7 +96,10 @@
       "Package": "arules",
       "Version": "1.7-5",
       "Source": "Repository",
-      "Repository": "RSPM",
+      "Repository": "https://mhahsler.r-universe.dev",
+      "RemoteUrl": "https://github.com/mhahsler/arules",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "d1c94bc63e70f1a9203161fcb3b68b5d0511da66",
       "Hash": "d71eb23f6645d01bc16bae79f58a1091",
       "Requirements": [
         "Matrix",
