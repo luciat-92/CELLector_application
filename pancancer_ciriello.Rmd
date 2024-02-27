@@ -175,7 +175,3 @@ for (id_t in seq_len(length(tissues_name))) {
 ### Download survival info, differences?
 
 ### Download CCL data and project, differences on essentiality?
-
-
-
-
