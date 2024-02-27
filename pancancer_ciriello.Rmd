@@ -125,7 +125,7 @@ names(BEM_all) <- tissues_name
 
 ### Apply CELLector
 
-```{r}
+```{r,  fig.height = 6, fig.width = 6}
 
 create_CSSp_groups <- function(CSS_p){
   
@@ -168,6 +168,10 @@ for (id_t in seq_len(length(tissues_name))) {
   
 }
 
+```
+```{r}
+# show an example
+CELLector.visualiseSearchingSpace_sunBurst(searchSpace = CSS[[4]]$hierarchical)
 ```
 
 ### Are there enrichments in subtypes?
